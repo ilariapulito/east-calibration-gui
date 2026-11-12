@@ -110,6 +110,7 @@ class Ui(QtWidgets.QMainWindow):
         self.stackedWidget.addWidget(self.calibration_page)
 
         self.stimulation_calibration_page = QtWidgets.QWidget()
+        self.setup_stimulation_calibration_page_ui()
         self.stackedWidget.addWidget(self.stimulation_calibration_page)
         
         self.setCentralWidget(self.stackedWidget)
@@ -187,6 +188,221 @@ class Ui(QtWidgets.QMainWindow):
             self.stackedWidget.setCurrentWidget(self.stimulation_calibration_page)
         else:
             self.stackedWidget.setCurrentWidget(self.main_standard_widget)
+
+    def copy_spin_box(self, source, parent, object_name):
+        if isinstance(source, QtWidgets.QDoubleSpinBox):
+            copied = QtWidgets.QDoubleSpinBox(parent)
+            copied.setDecimals(source.decimals())
+        else:
+            copied = QtWidgets.QSpinBox(parent)
+
+        copied.setObjectName(object_name)
+        copied.setRange(source.minimum(), source.maximum())
+        copied.setSingleStep(source.singleStep())
+        copied.setPrefix(source.prefix())
+        copied.setSuffix(source.suffix())
+        copied.setValue(source.value())
+        return copied
+
+    def setup_stimulation_calibration_page_ui(self):
+        self.stimulation_calibration_page.setObjectName("stimulationCalibrationPage")
+        self.stimulation_calibration_page.setStyleSheet("""
+            QWidget#stimulationCalibrationPage {
+                background-color: #f3f6fb;
+            }
+            QWidget#stimulationCalibrationPage QGroupBox {
+                background-color: #ffffff;
+                border: 1px solid #d5deeb;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding: 10px;
+                font-weight: bold;
+                color: #23395d;
+            }
+            QWidget#stimulationCalibrationPage QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 4px;
+            }
+            QWidget#stimulationCalibrationPage QSpinBox,
+            QWidget#stimulationCalibrationPage QDoubleSpinBox,
+            QWidget#stimulationCalibrationPage QTextEdit {
+                min-height: 26px;
+                border: 1px solid #c8d3e2;
+                border-radius: 4px;
+                padding: 2px 6px;
+                background-color: #ffffff;
+            }
+            QWidget#stimulationCalibrationPage QPushButton {
+                min-height: 34px;
+                border: none;
+                border-radius: 5px;
+                padding: 4px 12px;
+                background-color: #e4ebf5;
+                color: #23395d;
+                font-weight: bold;
+            }
+            QWidget#stimulationCalibrationPage QPushButton:hover {
+                background-color: #d3deed;
+            }
+            QWidget#stimulationCalibrationPage QPushButton#startStimulationCalibrationButton {
+                background-color: #198754;
+                color: #ffffff;
+            }
+            QWidget#stimulationCalibrationPage QPushButton#startStimulationCalibrationButton:hover {
+                background-color: #157347;
+            }
+            QWidget#stimulationCalibrationPage QPushButton#stopStimulationCalibrationButton {
+                background-color: #dc3545;
+                color: #ffffff;
+            }
+            QWidget#stimulationCalibrationPage QPushButton#stopStimulationCalibrationButton:hover {
+                background-color: #bb2d3b;
+            }
+        """)
+
+        layout = QtWidgets.QVBoxLayout(self.stimulation_calibration_page)
+        layout.setContentsMargins(18, 14, 18, 18)
+        layout.setSpacing(12)
+
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(12)
+        back_button = QtWidgets.QPushButton("← Return to Main GUI")
+        back_button.clicked.connect(self.exit_calibration_mode)
+        header.addWidget(back_button)
+
+        title = QtWidgets.QLabel("STIMULATION CALIBRATION")
+        title.setStyleSheet("font-size: 20px; font-weight: bold; color: #23395d;")
+        header.addWidget(title)
+        header.addStretch()
+        layout.addLayout(header)
+
+        controls = QtWidgets.QHBoxLayout()
+        controls.setSpacing(12)
+        layout.addLayout(controls)
+
+        left_column = QtWidgets.QVBoxLayout()
+        left_column.setSpacing(12)
+        controls.addLayout(left_column, stretch=3)
+
+        sequence_box = QtWidgets.QGroupBox("Trial sequence")
+        sequence_box.setToolTip(
+            "Le caselle 1-8 impostano rispettivamente i bit 0-7 del parametro trialSeq."
+        )
+        sequence_layout = QtWidgets.QHBoxLayout(sequence_box)
+        self.stimulationTrialSequenceBoxes = []
+        for index in range(8):
+            checkbox = QtWidgets.QCheckBox(str(index + 1), sequence_box)
+            checkbox.setObjectName(f"stimulationSeq{index + 1}CheckBox")
+            checkbox.setChecked(getattr(self, f"seq{index + 1}CheckBox").isChecked())
+            checkbox.setToolTip(f"Imposta il bit {index} di trialSeq.")
+            sequence_layout.addWidget(checkbox)
+            self.stimulationTrialSequenceBoxes.append(checkbox)
+        left_column.addWidget(sequence_box)
+
+        stim_parameters_box = QtWidgets.QGroupBox("Stimulation parameters")
+        stim_parameters_layout = QtWidgets.QVBoxLayout(stim_parameters_box)
+        pulse_layout = QtWidgets.QFormLayout()
+        self.stimulationCalibrationPulseWidth = self.copy_spin_box(
+            self.pulseWidthBox, stim_parameters_box, "stimulationCalibrationPulseWidth"
+        )
+        self.stimulationCalibrationIsi = self.copy_spin_box(
+            self.frequencyBox, stim_parameters_box, "stimulationCalibrationIsi"
+        )
+        pulse_layout.addRow("Pulse width (µs)", self.stimulationCalibrationPulseWidth)
+        pulse_layout.addRow("ISI (s)", self.stimulationCalibrationIsi)
+        stim_parameters_layout.addLayout(pulse_layout)
+
+        phase_box = QtWidgets.QGroupBox("Stimulation phase")
+        phase_layout = QtWidgets.QHBoxLayout(phase_box)
+        self.stimulationCalibrationPhaseButtons = {}
+        for name, text in (
+            ("biphasicButton", "Biphasic"),
+            ("positiveButton", "Positive"),
+            ("negativeButton", "Negative"),
+        ):
+            button = QtWidgets.QRadioButton(text, phase_box)
+            button.setObjectName(f"stimulationCalibration{name}")
+            button.setChecked(getattr(self, name).isChecked())
+            phase_layout.addWidget(button)
+            self.stimulationCalibrationPhaseButtons[name] = button
+        stim_parameters_layout.addWidget(phase_box)
+
+        amplitudes_box = QtWidgets.QGroupBox("Stimulation channels (mA)")
+        amplitudes_layout = QtWidgets.QGridLayout(amplitudes_box)
+        self.stimulationCalibrationChannels = []
+        for index in range(8):
+            row, column = divmod(index, 2)
+            channel_label = QtWidgets.QLabel(f"Channel {index + 1} (mA)")
+            channel_input = self.copy_spin_box(
+                getattr(self, f"stimCh{index + 1}"),
+                amplitudes_box,
+                f"stimulationCalibrationChannel{index + 1}",
+            )
+            amplitudes_layout.addWidget(channel_label, row, column * 2)
+            amplitudes_layout.addWidget(channel_input, row, column * 2 + 1)
+            self.stimulationCalibrationChannels.append(channel_input)
+        stim_parameters_layout.addWidget(amplitudes_box)
+        left_column.addWidget(stim_parameters_box)
+
+        sats_box = QtWidgets.QGroupBox("SATS parameters")
+        sats_layout = QtWidgets.QFormLayout(sats_box)
+        self.stimulationCalibrationTimeOn = self.copy_spin_box(
+            self.timeON, sats_box, "stimulationCalibrationTimeOn"
+        )
+        self.stimulationCalibrationTimeOff = self.copy_spin_box(
+            self.timeOFF, sats_box, "stimulationCalibrationTimeOff"
+        )
+        self.stimulationCalibrationEcrChannel = self.copy_spin_box(
+            self.ecrChannel, sats_box, "stimulationCalibrationEcrChannel"
+        )
+        self.stimulationCalibrationFcrChannel = self.copy_spin_box(
+            self.fcrChannel, sats_box, "stimulationCalibrationFcrChannel"
+        )
+        sats_layout.addRow("Time stimulation ON", self.stimulationCalibrationTimeOn)
+        sats_layout.addRow("Time stimulation OFF", self.stimulationCalibrationTimeOff)
+        sats_layout.addRow("ECR channel (1-16)", self.stimulationCalibrationEcrChannel)
+        sats_layout.addRow("FCR channel (1-16)", self.stimulationCalibrationFcrChannel)
+        controls.addWidget(sats_box, stretch=1)
+
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.setSpacing(12)
+        self.startStimulationCalibrationButton = QtWidgets.QPushButton("Start Stimulation")
+        self.startStimulationCalibrationButton.setObjectName("startStimulationCalibrationButton")
+        self.startStimulationCalibrationButton.clicked.connect(self.onStartStimButtonClicked)
+        self.stopStimulationCalibrationButton = QtWidgets.QPushButton("Stop")
+        self.stopStimulationCalibrationButton.setObjectName("stopStimulationCalibrationButton")
+        self.stopStimulationCalibrationButton.clicked.connect(self.onStopStimButtonClicked)
+        buttons.addWidget(self.startStimulationCalibrationButton)
+        buttons.addWidget(self.stopStimulationCalibrationButton)
+        layout.addLayout(buttons)
+
+        recording_box = QtWidgets.QGroupBox("Recording and data")
+        recording_layout = QtWidgets.QFormLayout(recording_box)
+        self.stimulationCalibrationRecordingTime = self.copy_spin_box(
+            self.recordingTimeBox, recording_box, "stimulationCalibrationRecordingTime"
+        )
+        self.stimulationCalibrationFileName = QtWidgets.QTextEdit(recording_box)
+        self.stimulationCalibrationFileName.setObjectName("stimulationCalibrationFileName")
+        self.stimulationCalibrationFileName.setMaximumHeight(40)
+        self.stimulationCalibrationFileName.setPlainText(self.nameEdit.toPlainText())
+
+        self.stimulationCalibrationSaveDirectoryButton = QtWidgets.QPushButton(
+            "Choose directory", recording_box
+        )
+        self.stimulationCalibrationSaveDirectoryButton.clicked.connect(
+            self.onSaveDirectoryButtonClicked
+        )
+        self.stimulationCalibrationSaveCheckBox = QtWidgets.QCheckBox("Save Data", recording_box)
+        self.stimulationCalibrationSaveCheckBox.setChecked(self.saveCheckBox.isChecked())
+
+        recording_layout.addRow("Recording time (s)", self.stimulationCalibrationRecordingTime)
+        recording_layout.addRow("File name", self.stimulationCalibrationFileName)
+        recording_layout.addRow(
+            self.stimulationCalibrationSaveDirectoryButton,
+            self.stimulationCalibrationSaveCheckBox,
+        )
+        layout.addWidget(recording_box)
 
     def setup_calibration_page_ui(self):
         """Costruisce la UI di calibrazione con i pulsanti Start e Stop."""
@@ -623,33 +839,60 @@ class Ui(QtWidgets.QMainWindow):
         elif hasattr(self, 'satsButton') and self.satsButton.isChecked(): self.params['mode'] = 'SATS'
         elif hasattr(self, 'conButton') and self.conButton.isChecked(): self.params['mode'] = 'CON'
         elif hasattr(self, 'lectureCalibrationButton') and self.lectureCalibrationButton.isChecked(): self.params['mode'] = 'Calibration'
+        elif hasattr(self, 'stimulationCalibrationButton') and self.stimulationCalibrationButton.isChecked(): self.params['mode'] = 'CON'
 
-        self.params['pulseWidth'] = self.pulseWidthBox.value()
-        self.params['stimFrequency'] = self.frequencyBox.value()
+        stimulation_calibration = (
+            hasattr(self, 'stimulationCalibrationButton')
+            and self.stimulationCalibrationButton.isChecked()
+        )
+        if stimulation_calibration:
+            pulse_width_box = self.stimulationCalibrationPulseWidth
+            frequency_box = self.stimulationCalibrationIsi
+            phase_buttons = self.stimulationCalibrationPhaseButtons
+            amplitude_boxes = self.stimulationCalibrationChannels
+            sequence_boxes = self.stimulationTrialSequenceBoxes
+        else:
+            pulse_width_box = self.pulseWidthBox
+            frequency_box = self.frequencyBox
+            phase_buttons = {
+                'biphasicButton': self.biphasicButton,
+                'positiveButton': self.positiveButton,
+                'negativeButton': self.negativeButton,
+            }
+            amplitude_boxes = [getattr(self, f"stimCh{index}") for index in range(1, 9)]
+            sequence_boxes = [getattr(self, f"seq{index}CheckBox") for index in range(1, 9)]
 
-        if self.biphasicButton.isChecked(): self.params['stimPhase'] = 'Biphasic'
-        elif self.positiveButton.isChecked(): self.params['stimPhase'] = 'Positive'
-        elif self.negativeButton.isChecked(): self.params['stimPhase'] = 'Negative'
+        self.params['pulseWidth'] = pulse_width_box.value()
+        self.params['stimFrequency'] = frequency_box.value()
 
-        self.params['stimAmplitude'] = [
-            self.stimCh1.value(), self.stimCh2.value(), self.stimCh3.value(), self.stimCh4.value(),
-            self.stimCh5.value(), self.stimCh6.value(), self.stimCh7.value(), self.stimCh8.value()
-        ]
+        if phase_buttons['biphasicButton'].isChecked(): self.params['stimPhase'] = 'Biphasic'
+        elif phase_buttons['positiveButton'].isChecked(): self.params['stimPhase'] = 'Positive'
+        elif phase_buttons['negativeButton'].isChecked(): self.params['stimPhase'] = 'Negative'
 
-        trialSeq = [
-            self.seq1CheckBox.isChecked(), self.seq2CheckBox.isChecked()<<1, self.seq3CheckBox.isChecked()<<2, self.seq4CheckBox.isChecked()<<3,
-            self.seq5CheckBox.isChecked()<<4, self.seq6CheckBox.isChecked()<<5, self.seq7CheckBox.isChecked()<<6, self.seq8CheckBox.isChecked()<<7
-        ]
+        self.params['stimAmplitude'] = [box.value() for box in amplitude_boxes]
+
+        trialSeq = [box.isChecked() << index for index, box in enumerate(sequence_boxes)]
         self.params['trialSeq'] = ((((((trialSeq[0] | trialSeq[1]) | trialSeq[2]) | trialSeq[3]) | trialSeq[4]) | trialSeq[5]) | trialSeq[6]) | trialSeq[7]
 
-        self.params['timeON'] = self.timeON.value()
-        self.params['timeOFF'] = self.timeOFF.value()
+        if stimulation_calibration:
+            time_on_box = self.stimulationCalibrationTimeOn
+            time_off_box = self.stimulationCalibrationTimeOff
+            ecr_channel_box = self.stimulationCalibrationEcrChannel
+            fcr_channel_box = self.stimulationCalibrationFcrChannel
+        else:
+            time_on_box = self.timeON
+            time_off_box = self.timeOFF
+            ecr_channel_box = self.ecrChannel
+            fcr_channel_box = self.fcrChannel
+
+        self.params['timeON'] = time_on_box.value()
+        self.params['timeOFF'] = time_off_box.value()
         self.params['timeRead'] = self.timeRead.value()
         self.params['timeStim'] = self.timeStim.value()
         self.params['tremorThreshold'] = int(self.tremorThreshold.value())
         
-        self.params['ecrChannel']   = self.ecrChannel.value() - 1
-        self.params['fcrChannel']   = self.fcrChannel.value() - 1
+        self.params['ecrChannel']   = ecr_channel_box.value() - 1
+        self.params['fcrChannel']   = fcr_channel_box.value() - 1
         self.params['tremorMuscle'] = self.params['ecrChannel']
         
         self.params['numPulses'] = self.numPulses.value()
@@ -671,8 +914,19 @@ class Ui(QtWidgets.QMainWindow):
             elif self.ch8radioButton.isChecked(): self.params['emgChannels'] = 8
             elif self.ch16radioButton.isChecked(): self.params['emgChannels'] = 16
 
-        self.params['recordingTime'] = self.recordingTimeBox.value()
-        self.fileName = self.nameEdit.toPlainText()
+        if stimulation_calibration:
+            recording_time_box = self.stimulationCalibrationRecordingTime
+            file_name_edit = self.stimulationCalibrationFileName
+            save_data_checkbox = self.stimulationCalibrationSaveCheckBox
+        else:
+            recording_time_box = self.recordingTimeBox
+            file_name_edit = self.nameEdit
+            save_data_checkbox = self.saveCheckBox
+
+        self.params['recordingTime'] = recording_time_box.value()
+        self.fileName = file_name_edit.toPlainText()
+        self.params['saveData'] = save_data_checkbox.isChecked()
+        self.params['stimulationCalibration'] = stimulation_calibration
 
     def onConnectButtonClicked(self):
         connected = self.fcn_connect_hardware()
@@ -857,7 +1111,7 @@ class Ui(QtWidgets.QMainWindow):
             self.emgRaw[j, :] = self.emgRaw[j, :] * convFactor - offset[j]
 
         commandSent = self.fcn_stop_stim()
-        if not self.saveCheckBox.isChecked():
+        if not self.params.get('saveData', self.saveCheckBox.isChecked()):
             msg = QtWidgets.QMessageBox()
             msg.setIcon(QtWidgets.QMessageBox.Warning)
             msg.setWindowTitle('EAST GUI')
@@ -955,6 +1209,7 @@ class Ui(QtWidgets.QMainWindow):
         confString.append((self.params['ecrChannel'] << 4) | self.params['fcrChannel'])
 
         confString.append(self.CRC8(confString, commnadSize - 1))
+        sendConfstring = [int(x) for x in confString]
         self.serialPort.write(struct.pack("{0}B".format(len(sendConfstring)), *sendConfstring))
 
         self.readEMG(display_channels=[self.params['ecrChannel'], self.params['fcrChannel']])

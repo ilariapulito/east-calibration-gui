@@ -504,7 +504,7 @@ QPushButton#analyzeButton {
                       <number>25</number>
                      </property>
                      <property name="value">
-                      <number>400</number>
+                      <number>1000</number>
                      </property>
                     </widget>
                    </item>
@@ -517,7 +517,7 @@ QPushButton#analyzeButton {
                       <number>100</number>
                      </property>
                      <property name="value">
-                      <number>100</number>
+                      <number>5</number>
                      </property>
                     </widget>
                    </item>
