@@ -1,0 +1,18 @@
+<RCC>
+  <qresource prefix="icons">
+    <file>Icons/lightning-bolt.png</file>
+    <file>Icons/radio-waves.png</file>
+    <file>Icons/back.png</file>
+    <file>Icons/quattrocento_scheme.png</file>
+    <file>Icons/download.png</file>
+    <file>Icons/edit.png</file>
+    <file>Icons/exit.png</file>
+    <file>Icons/frames-per-second.png</file>
+    <file>Icons/menu.png</file>
+    <file>Icons/settings (1).png</file>
+    <file>Icons/settings.png</file>
+  </qresource>
+  <qresource prefix="font">
+    <file>Icons/Roboto-Regular.ttf</file>
+  </qresource>
+</RCC>
