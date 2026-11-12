@@ -13,6 +13,7 @@ class CalibrationWorker(QThread):
         super().__init__(parent)
         self.ui = ui
         self.is_running = False
+        self.stop_command_sent = False
 
     def stop(self):
         """Richiede l'arresto del loop di acquisizione."""
@@ -68,7 +69,13 @@ class CalibrationWorker(QThread):
             self.signal_error.emit(str(e))
         finally:
             # Invio comando di stop al firmware STM32
-            if self.ui and hasattr(self.ui, 'fcn_stop_stim') and self.ui.serialPort and self.ui.serialPort.is_open:
+            if (
+                not self.stop_command_sent
+                and self.ui
+                and hasattr(self.ui, 'fcn_stop_stim')
+                and self.ui.serialPort
+                and self.ui.serialPort.is_open
+            ):
                 try:
                     self.ui.fcn_stop_stim()
                 except Exception:
