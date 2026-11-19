@@ -384,7 +384,7 @@ class Ui(QtWidgets.QMainWindow):
 
         self.startStimCalibBtn = QtWidgets.QPushButton("Start Stimulation Calibration")
         self.startStimCalibBtn.setObjectName("startStimulationCalibrationButton")
-        self.startStimCalibBtn.setEnabled(False)
+        self.startStimCalibBtn.setEnabled(True)
         self.startStimCalibBtn.clicked.connect(self.start_stim_calibration)
         self.stopStimCalibBtn = QtWidgets.QPushButton("STOP / Uncomfortable")
         self.stopStimCalibBtn.setObjectName("stopStimulationCalibrationButton")
@@ -395,7 +395,8 @@ class Ui(QtWidgets.QMainWindow):
         left.addStretch(1)
 
         self.stimGuidanceBanner = QtWidgets.QLabel(
-            "Ready. Arm pronated, flat & relaxed."
+            "Enter distinct ECR/FCR channels manually or use lecture calibration. "
+            "Arm pronated, flat & relaxed."
         )
         self.stimGuidanceBanner.setObjectName("stimGuidanceBanner")
         self.stimGuidanceBanner.setWordWrap(True)
@@ -664,7 +665,7 @@ class Ui(QtWidgets.QMainWindow):
         sweep_layout = QtWidgets.QVBoxLayout(sweep_box)
         sweep_buttons = QtWidgets.QHBoxLayout()
         self.startStimCalibBtn = QtWidgets.QPushButton("Start Stimulation Calibration")
-        self.startStimCalibBtn.setEnabled(False)
+        self.startStimCalibBtn.setEnabled(True)
         self.startStimCalibBtn.clicked.connect(self.start_stim_calibration)
         self.stopStimCalibBtn = QtWidgets.QPushButton("Stop Stimulation Calibration")
         self.stopStimCalibBtn.setEnabled(False)
@@ -1256,9 +1257,9 @@ class Ui(QtWidgets.QMainWindow):
         self.calibrated_fcr = None
         self.startReadCalibBtn.setEnabled(True)
         self.stopReadCalibBtn.setEnabled(False)
-        self.startStimCalibBtn.setEnabled(False)
+        self.startStimCalibBtn.setEnabled(True)
         self.stimStatusLabel.setText(
-            "Stimulation Status: Disabled until lecture calibration succeeds."
+            "Stimulation Status: Enter distinct ECR/FCR channels manually or run lecture calibration."
         )
         self.set_read_feedback("error", str(error))
 
@@ -1267,10 +1268,6 @@ class Ui(QtWidgets.QMainWindow):
         """Starts the sequential radial and median nerve calibration."""
         if not hasattr(self, 'serialPort') or self.serialPort is None or not self.serialPort.is_open:
             QMessageBox.critical(self, "Error", "Hardware EAST non connesso!")
-            return
-
-        if self.calibrated_ecr is None or self.calibrated_fcr is None:
-            QMessageBox.critical(self, "Error", "Completare prima la Calibrazione di Lettura.")
             return
 
         self.getParameters()
@@ -1285,6 +1282,22 @@ class Ui(QtWidgets.QMainWindow):
 
         total_electrodes = self.stimTotalElectrodesSpin.value()
         half = total_electrodes // 2
+        n_giri = self.stimGiriSpin.value()
+        radial_els = list(range(1, half + 1))
+        median_els = list(range(half + 1, total_electrodes + 1))
+        max_time_on_s = max(
+            (len(electrodes) * n_giri + 1) * int(isi_s) + 1
+            for electrodes in (radial_els, median_els)
+        )
+        if max_time_on_s > 255:
+            QMessageBox.warning(
+                self, "Round duration",
+                "The longest stimulation round needs "
+                f"{max_time_on_s} seconds of ON time, but the firmware command "
+                "supports at most 255 seconds. Reduce the turns or ISI.",
+            )
+            return
+
         start_current = self.stimStartCurrentSpin.value()
         current_step = self.stimCurrentStepSpin.value()
         max_rounds = self.stimMaxRoundsSpin.value()
@@ -1322,10 +1335,10 @@ class Ui(QtWidgets.QMainWindow):
 
         self.stim_round_grids = {"radial": None, "median": None}
         self.stim_calibration_state = {
-            "radial_els": list(range(1, half + 1)),
-            "median_els": list(range(half + 1, total_electrodes + 1)),
+            "radial_els": radial_els,
+            "median_els": median_els,
             "total_electrodes": total_electrodes,
-            "n_giri": self.stimGiriSpin.value(),
+            "n_giri": n_giri,
             "start_current": start_current,
             "current_step": current_step,
             "max_rounds": max_rounds,
@@ -1371,10 +1384,16 @@ class Ui(QtWidgets.QMainWindow):
         round_number = state["round_idx"] + 1
         role = "Radial Nerve (ECR)" if nerve == "radial" else "Median Nerve (FCR)"
         channel_range = f"El. {active_els[0]}–{active_els[-1]}"
+        duration_ms = int(
+            (len(active_els) * state["n_giri"] + 1) * state["isi_s"] * 1000
+        )
+        time_on_s = (duration_ms + 999) // 1000 + 1
         self.params.update({
             "stimulationCalibration": True,
             "mode": "CON",
             "emgChannels": 16,
+            "trialSeq": 1,
+            "timeON": time_on_s,
             "stimAmplitude": [
                 current_ma if electrode in active_els else 0.0
                 for electrode in range(1, 9)
@@ -1393,16 +1412,14 @@ class Ui(QtWidgets.QMainWindow):
             self.lbl_med_res.setText("Searching...")
         self.stimGuidanceBanner.setText(
             f"Testing {role} ({channel_range}) | Round {round_number}/"
-            f"{state['max_rounds']} at {current_ma:.1f} mA — "
+            f"{state['max_rounds']} at {current_ma:.1f} mA | "
+            f"ON window {time_on_s}s — "
             "Stay still while pulsing..."
         )
         self.calib_worker = CalibrationWorker(ui=self)
         self.calib_worker.signal_chunk.connect(self.on_calibration_chunk_received)
         self.calib_worker.signal_error.connect(self.on_stimulation_round_error)
         self.calib_worker.start()
-        duration_ms = int(
-            (len(active_els) * state["n_giri"] + 1) * state["isi_s"] * 1000
-        )
         self.stim_round_timer.start(duration_ms)
 
     def stop_stim_calibration(self):
@@ -1425,9 +1442,7 @@ class Ui(QtWidgets.QMainWindow):
         self.stim_calibration_state = None
         self.calib_mode_active = None
         self.stopStimCalibBtn.setEnabled(False)
-        self.startStimCalibBtn.setEnabled(
-            self.calibrated_ecr is not None and self.calibrated_fcr is not None
-        )
+        self.startStimCalibBtn.setEnabled(True)
         self.stimGuidanceBanner.setText(
             "STOPPED by user (Uncomfortable / Paused)."
         )
@@ -1449,9 +1464,7 @@ class Ui(QtWidgets.QMainWindow):
             self.stim_calibration_state = None
             self.calib_mode_active = None
             self.stopStimCalibBtn.setEnabled(False)
-            self.startStimCalibBtn.setEnabled(
-                self.calibrated_ecr is not None and self.calibrated_fcr is not None
-            )
+            self.startStimCalibBtn.setEnabled(True)
             self.stimGuidanceBanner.setText(f"Calibration error: {err_msg}")
         QMessageBox.critical(self, "Stimulation Calibration Error", err_msg)
 
@@ -1559,9 +1572,7 @@ class Ui(QtWidgets.QMainWindow):
         self.stim_calibration_state = None
         self.calib_mode_active = None
         self.stopStimCalibBtn.setEnabled(False)
-        self.startStimCalibBtn.setEnabled(
-            self.calibrated_ecr is not None and self.calibrated_fcr is not None
-        )
+        self.startStimCalibBtn.setEnabled(True)
         self.stimGuidanceBanner.setText(message)
 
     def save_stimulation_round(self, emg_raw_16ch, fs, state, nerve, active_els, result):
@@ -1901,7 +1912,7 @@ class Ui(QtWidgets.QMainWindow):
             self.stopReadCalibBtn.setEnabled(False)
             self.set_read_feedback("error", err_msg)
         elif self.calib_mode_active == "stim":
-            self.startStimCalibBtn.setEnabled(self.calibrated_ecr is not None)
+            self.startStimCalibBtn.setEnabled(True)
             self.stopStimCalibBtn.setEnabled(False)
             self.stimStatusLabel.setText(f"Stimulation Status: Error - {err_msg}")
         QMessageBox.critical(self, "Calibration Error", f"An error occurred: {err_msg}")
